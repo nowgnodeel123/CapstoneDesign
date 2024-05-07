@@ -1,0 +1,26 @@
+{
+  "installationFolder": "C:\\code\\capstone-design\\BlinkingEyes\\OpenCV\\build\\intermediates\\prefab_package\\debug\\prefab",
+  "gradlePath": ":OpenCV",
+  "packageInfo": {
+    "packageName": "OpenCV",
+    "packageSchemaVersion": 2,
+    "packageDependencies": [],
+    "modules": [
+      {
+        "moduleName": "opencv_jni_shared",
+        "moduleHeaders": "C:\\code\\capstone-design\\BlinkingEyes\\OpenCV\\native\\jni\\include",
+        "moduleExportLibraries": [],
+        "abis": [
+          {
+            "abiName": "arm64-v8a",
+            "abiApi": 21,
+            "abiNdkMajor": 25,
+            "abiStl": "c++_shared",
+            "abiLibrary": "C:\\code\\capstone-design\\BlinkingEyes\\OpenCV\\.cxx\\Debug\\6q6y3a1k\\arm64-v8a\\libopencv_jni_shared.a",
+            "abiAndroidGradleBuildJsonFile": "C:\\code\\capstone-design\\BlinkingEyes\\OpenCV\\.cxx\\Debug\\6q6y3a1k\\arm64-v8a\\android_gradle_build.json"
+          }
+        ]
+      }
+    ]
+  }
+}
