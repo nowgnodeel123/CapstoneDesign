@@ -2,12 +2,20 @@ package com.example.blinking_eyes;
 
 import static android.Manifest.permission.CAMERA;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.AudioManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.SurfaceView;
+import android.view.WindowManager;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -49,6 +57,8 @@ public class MainActivity extends AppCompatActivity
     private CascadeClassifier cascadeClassifier;
 
     private int absoluteEyeSize;
+    private long lastEyeDetectedTime = 0; // 마지막으로 눈이 검출된 시간
+    private AudioManager audioManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,6 +69,8 @@ public class MainActivity extends AppCompatActivity
         m_CameraView.setVisibility(SurfaceView.VISIBLE);
         m_CameraView.setCvCameraViewListener(this);
         m_CameraView.setCameraIndex(m_Camidx); // 카메라 인덱스 사용
+
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
     }
 
     @Override
@@ -180,21 +192,62 @@ public class MainActivity extends AppCompatActivity
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         matInput = inputFrame.rgba();
+        boolean eyesDetected = false;
 
         if (cascadeClassifier != null) {
             MatOfRect eyes = new MatOfRect();
-            // grayscale 이미지가 더 빠른 검출 속도와 정확도를 제공합니다.
             Mat gray = inputFrame.gray();
-            // 눈을 검출합니다.
             cascadeClassifier.detectMultiScale(gray, eyes, 1.1, 2, 2,
                     new Size(absoluteEyeSize, absoluteEyeSize), new Size());
             Rect[] eyesArray = eyes.toArray();
             for (Rect rect : eyesArray) {
-                // 검출된 눈 주위에 사각형을 그립니다.
                 Imgproc.rectangle(matInput, rect.tl(), rect.br(), new Scalar(0, 255, 0), 2);
+                eyesDetected = true;
             }
         }
 
+        if (eyesDetected) {
+            lastEyeDetectedTime = System.currentTimeMillis();
+        } else if ((System.currentTimeMillis() - lastEyeDetectedTime) > 5000) { // 5초 동안 눈이 검출되지 않음
+            setBrightnessAndVolumeMinimum(this);
+        }
+
         return matInput;
+    }
+
+    private void setBrightnessAndVolumeMinimum(Context context) {
+        Activity activity = (Activity) context;
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (!Settings.System.canWrite(context)) {
+                        Intent intent = new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS);
+                        intent.setData(Uri.parse("package:" + context.getPackageName()));
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        context.startActivity(intent);
+                        return; // 사용자가 권한을 허용할 때까지 기다립니다.
+                    }
+                }
+
+                // 밝기 최소로 설정
+                WindowManager.LayoutParams layoutParams = activity.getWindow().getAttributes();
+                layoutParams.screenBrightness = 0.01f; // 밝기 1%
+                activity.getWindow().setAttributes(layoutParams);
+
+                // 소리 최소로 설정
+                AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0);
+
+                // 3초 후 애플리케이션 종료하는 메소드
+                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        activity.finishAffinity(); // 액티비티 스택에 있는 모든 액티비티를 종료함.
+                        System.exit(0); // 애플리케이션 프로세스를 종료함.
+                    }
+                }, 3000); // 3초 지연 시킴..
+            }
+        });
     }
 }
