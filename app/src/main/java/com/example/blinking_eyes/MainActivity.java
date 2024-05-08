@@ -208,7 +208,7 @@ public class MainActivity extends AppCompatActivity
 
         if (eyesDetected) {
             lastEyeDetectedTime = System.currentTimeMillis();
-        } else if ((System.currentTimeMillis() - lastEyeDetectedTime) > 5000) { // 5초 동안 눈이 검출되지 않음
+        } else if ((System.currentTimeMillis() - lastEyeDetectedTime) > 3000) { // 3초 동안 눈이 검출되지 않음
             setBrightnessAndVolumeMinimum(this);
         }
 
