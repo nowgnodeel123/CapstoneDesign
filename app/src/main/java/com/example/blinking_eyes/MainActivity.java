@@ -2,6 +2,7 @@ package com.example.blinking_eyes;
 
 import static android.Manifest.permission.CAMERA;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -15,7 +16,12 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.SurfaceView;
+import android.view.View;
 import android.view.WindowManager;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.EditText;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -42,6 +48,9 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity
         implements CameraBridgeViewBase.CvCameraViewListener2 {
 
+    private WebView webView;
+    private EditText urlField;
+    private Button goButton;
     private final int m_Camidx = 1; // front : 1, back : 0
     private CameraBridgeViewBase m_CameraView;
     private static final int CAMERA_PERMISSION_CODE = 200;
@@ -60,10 +69,29 @@ public class MainActivity extends AppCompatActivity
     private long lastEyeDetectedTime = 0; // 마지막으로 눈이 검출된 시간
     private AudioManager audioManager;
 
+    @SuppressLint("SetJavaScriptEnabled") // 경고 무시함..
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        webView = (WebView) findViewById(R.id.webview);
+        urlField = (EditText) findViewById(R.id.urlField);
+        goButton = (Button) findViewById(R.id.goButton);
+
+        webView.setWebViewClient(new WebViewClient());
+        webView.getSettings().setJavaScriptEnabled(true);
+
+        goButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String url = urlField.getText().toString().trim();
+                if (!url.startsWith("http://") && !url.startsWith("http://")) {
+                    url = "http://" + url; // http://로 시작하지 않는 경우에는 자동으로 추가해주도록..
+                }
+                webView.loadUrl(url);
+            }
+        });
 
         m_CameraView = (CameraBridgeViewBase) findViewById(R.id.activity_surface_view);
         m_CameraView.setVisibility(SurfaceView.VISIBLE);
@@ -208,7 +236,7 @@ public class MainActivity extends AppCompatActivity
 
         if (eyesDetected) {
             lastEyeDetectedTime = System.currentTimeMillis();
-        } else if ((System.currentTimeMillis() - lastEyeDetectedTime) > 3000) { // 3초 동안 눈이 검출되지 않음
+        } else if ((System.currentTimeMillis() - lastEyeDetectedTime) > 5000) { // 5초 동안 눈이 검출되지 않음
             setBrightnessAndVolumeMinimum(this);
         }
 
