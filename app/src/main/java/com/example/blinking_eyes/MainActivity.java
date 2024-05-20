@@ -45,6 +45,9 @@ import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
 
+// 지금 3분 단위로 카메라가 on/off는 되는데 지금 다시 on 되고 나서 눈 인식 후 밝기 볼륨 조절 메소드가 동작을
+// 하지 않고 있음.
+
 public class MainActivity extends AppCompatActivity
         implements CameraBridgeViewBase.CvCameraViewListener2 {
 
@@ -113,7 +116,7 @@ public class MainActivity extends AppCompatActivity
         }
         if (_Permission) {
             // 여기서 카메라 뷰 받아옴
-            onCameraPermissionGranted();
+            activeCamera();
         }
     }
 
@@ -188,6 +191,22 @@ public class MainActivity extends AppCompatActivity
         }
     };
 
+    // 3분 주기로 실행 시키는 메소드
+    private void activeCamera() {
+        final Handler handler = new Handler();
+        final Runnable activeCamera = new Runnable() {
+            @Override
+            public void run() {
+                onCameraPermissionGranted();
+                // 3분 후에 다시 이 코드를 실행
+                handler.postDelayed(this, 90000);
+            }
+        };
+        // 최초 실행을 위해 0ms 후에 실행
+        handler.postDelayed(activeCamera, 0);
+    }
+
+    // 10초 동안 활성화 되로록 함.
     protected void onCameraPermissionGranted() {
         List<? extends CameraBridgeViewBase> cameraViews = getCameraViewList();
         if (cameraViews == null) {
@@ -197,6 +216,7 @@ public class MainActivity extends AppCompatActivity
             if (cameraBridgeViewBase != null) {
                 cameraBridgeViewBase.setCameraPermissionGranted();
                 cameraBridgeViewBase.enableView(); // 카메라 뷰 활성화
+                new Handler().postDelayed(cameraBridgeViewBase::disableView, 10000);
             }
         }
     }
@@ -225,7 +245,7 @@ public class MainActivity extends AppCompatActivity
         if (cascadeClassifier != null) {
             MatOfRect eyes = new MatOfRect();
             Mat gray = inputFrame.gray();
-            cascadeClassifier.detectMultiScale(gray, eyes, 1.1, 2, 2,
+            cascadeClassifier.detectMultiScale(gray, eyes, 1.2, 3, 2,
                     new Size(absoluteEyeSize, absoluteEyeSize), new Size());
             Rect[] eyesArray = eyes.toArray();
             for (Rect rect : eyesArray) {
@@ -257,24 +277,49 @@ public class MainActivity extends AppCompatActivity
                         return; // 사용자가 권한을 허용할 때까지 기다립니다.
                     }
                 }
+                final Handler handler = new Handler(Looper.getMainLooper());
+                final int duration = 10000; // 10초
+                final int interval = 1000;
+                final int steps = duration / interval; // 단계 수 (10단계)
+                final float brightnessStep = 1.0f / steps;
+                final int volumeStep = ((AudioManager) context.getSystemService(Context.AUDIO_SERVICE))
+                        .getStreamMaxVolume(AudioManager.STREAM_MUSIC) / steps;
 
-                // 밝기 최소로 설정
-                WindowManager.LayoutParams layoutParams = activity.getWindow().getAttributes();
-                layoutParams.screenBrightness = 0.01f; // 밝기 1%
-                activity.getWindow().setAttributes(layoutParams);
+                // 초기 밝기와 소리 설정
+                final WindowManager.LayoutParams layoutParams = activity.getWindow().getAttributes();
+                final AudioManager manager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
 
-                // 소리 최소로 설정
-                AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0);
+                final Runnable reduceBrightnessAndVolume = new Runnable() {
+                    int currentStep = 0;
 
-                // 3초 후 애플리케이션 종료하는 메소드
-                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
                     @Override
                     public void run() {
-                        activity.finishAffinity(); // 액티비티 스택에 있는 모든 액티비티를 종료함.
-                        System.exit(0); // 애플리케이션 프로세스를 종료함.
+                        if (currentStep < steps) {
+                            // 밝기 줄이기
+                            layoutParams.screenBrightness = Math.max(layoutParams.screenBrightness - brightnessStep, 0.01f);
+                            activity.getWindow().setAttributes(layoutParams);
+
+                            // 소리 줄이기
+                            int currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, Math.max(currentVolume - volumeStep, 0), 0);
+
+                            currentStep++;
+                            handler.postDelayed(this, interval);
+                        } else {
+                            // 5초 후 애플리케이션 종료
+                            handler.postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    activity.finishAffinity(); // 액티비티 스택에 있는 모든 액티비티를 종료함.
+                                    System.exit(0); // 애플리케이션 프로세스를 종료함.
+                                }
+                            }, 5000); // 5초 지연 시킴.
+                        }
                     }
-                }, 3000); // 3초 지연 시킴..
+                };
+
+                // 처음 실행
+                handler.post(reduceBrightnessAndVolume);
             }
         });
     }
