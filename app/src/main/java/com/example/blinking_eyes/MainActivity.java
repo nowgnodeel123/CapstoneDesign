@@ -58,6 +58,9 @@ public class MainActivity extends AppCompatActivity
     private CameraBridgeViewBase m_CameraView;
     private static final int CAMERA_PERMISSION_CODE = 200;
     private static final String TAG = "opencv";
+    // 카메라 상태를 추적 하기 위한 클래스 멤버 변수 추가
+    private boolean isCameraEnabled = false;
+
 
     static {
         System.loadLibrary("blinking_eyes");
@@ -85,6 +88,14 @@ public class MainActivity extends AppCompatActivity
         webView.setWebViewClient(new WebViewClient());
         webView.getSettings().setJavaScriptEnabled(true);
 
+        Button btnToggleCamera = (Button) findViewById(R.id.btnToggleCamera);
+        btnToggleCamera.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleCamera();
+            }
+        });
+
         goButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -102,6 +113,20 @@ public class MainActivity extends AppCompatActivity
         m_CameraView.setCameraIndex(m_Camidx); // 카메라 인덱스 사용
 
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+    }
+
+    private void toggleCamera() {
+        if (isCameraEnabled) {
+            // 현재 카메라가 켜져 있으면 끕니다
+            m_CameraView.setVisibility(SurfaceView.GONE);
+            m_CameraView.disableView();
+        } else {
+            // 현재 카메라가 꺼져 있으면 켭니다
+            m_CameraView.setVisibility(SurfaceView.VISIBLE);
+            m_CameraView.enableView();
+            m_CameraView.setCvCameraViewListener(this); // 선택적으로 리스너를 재설정합니다
+        }
+        isCameraEnabled = !isCameraEnabled; // 카메라 상태를 토글합니다
     }
 
     @Override
@@ -191,22 +216,22 @@ public class MainActivity extends AppCompatActivity
         }
     };
 
-    // 3분 주기로 실행 시키는 메소드
+    // 2분 주기로 실행 시키는 메소드
     private void activeCamera() {
         final Handler handler = new Handler();
         final Runnable activeCamera = new Runnable() {
             @Override
             public void run() {
                 onCameraPermissionGranted();
-                // 3분 후에 다시 이 코드를 실행
-                handler.postDelayed(this, 90000);
+                // 2분 후에 다시 이 코드를 실행
+                handler.postDelayed(this, 120000);
             }
         };
         // 최초 실행을 위해 0ms 후에 실행
         handler.postDelayed(activeCamera, 0);
     }
 
-    // 10초 동안 활성화 되로록 함.
+    // 20초 동안 활성화 되로록 함.
     protected void onCameraPermissionGranted() {
         List<? extends CameraBridgeViewBase> cameraViews = getCameraViewList();
         if (cameraViews == null) {
@@ -216,7 +241,7 @@ public class MainActivity extends AppCompatActivity
             if (cameraBridgeViewBase != null) {
                 cameraBridgeViewBase.setCameraPermissionGranted();
                 cameraBridgeViewBase.enableView(); // 카메라 뷰 활성화
-                new Handler().postDelayed(cameraBridgeViewBase::disableView, 10000);
+                new Handler().postDelayed(cameraBridgeViewBase::disableView, 20000);
             }
         }
     }
@@ -256,7 +281,7 @@ public class MainActivity extends AppCompatActivity
 
         if (eyesDetected) {
             lastEyeDetectedTime = System.currentTimeMillis();
-        } else if ((System.currentTimeMillis() - lastEyeDetectedTime) > 5000) { // 5초 동안 눈이 검출되지 않음
+        } else if ((System.currentTimeMillis() - lastEyeDetectedTime) > 2000) { // 2초 동안 눈이 검출되지 않음
             setBrightnessAndVolumeMinimum(this);
         }
 
@@ -279,15 +304,15 @@ public class MainActivity extends AppCompatActivity
                 }
                 final Handler handler = new Handler(Looper.getMainLooper());
                 final int duration = 10000; // 10초
-                final int interval = 1000;
+                final int interval = 1000; // 1초마다 단계마다 변화
                 final int steps = duration / interval; // 단계 수 (10단계)
-                final float brightnessStep = 1.0f / steps;
-                final int volumeStep = ((AudioManager) context.getSystemService(Context.AUDIO_SERVICE))
-                        .getStreamMaxVolume(AudioManager.STREAM_MUSIC) / steps;
+                final float brightnessStep = 1.0f / (float) steps;
+                final AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+                final int maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                final float volumeStep = maxVolume / (float) steps; // 소수점을 유지하기 위해 float로 나눗셈
 
                 // 초기 밝기와 소리 설정
                 final WindowManager.LayoutParams layoutParams = activity.getWindow().getAttributes();
-                final AudioManager manager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
 
                 final Runnable reduceBrightnessAndVolume = new Runnable() {
                     int currentStep = 0;
@@ -301,12 +326,14 @@ public class MainActivity extends AppCompatActivity
 
                             // 소리 줄이기
                             int currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
-                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, Math.max(currentVolume - volumeStep, 0), 0);
+                            // volumeStep을 반올림하여 정수로 변환
+                            int newVolume = Math.max(currentVolume - (int) Math.round(volumeStep), 0);
+                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0);
 
                             currentStep++;
                             handler.postDelayed(this, interval);
                         } else {
-                            // 5초 후 애플리케이션 종료
+                            // 3초 후 애플리케이션 종료
                             handler.postDelayed(new Runnable() {
                                 @Override
                                 public void run() {
